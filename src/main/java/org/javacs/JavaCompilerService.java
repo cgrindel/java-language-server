@@ -22,13 +22,13 @@ class JavaCompilerService {
     final SourceFileManager fileManager;
 
     JavaCompilerService(Set<Path> classPath, Set<Path> docPath, Set<String> addExports) {
-        System.err.println("Class path:");
+        LOG.info("Class path:");
         for (var p : classPath) {
-            System.err.println("  " + p);
+            LOG.info("  " + p);
         }
-        System.err.println("Doc path:");
+        LOG.info("Doc path:");
         for (var p : docPath) {
-            System.err.println("  " + p);
+            LOG.info("  " + p);
         }
         // classPath can't actually be modified, because JavaCompiler remembers it from task to task
         this.classPath = Collections.unmodifiableSet(classPath);
