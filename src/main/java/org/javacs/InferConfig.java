@@ -329,23 +329,16 @@ class InferConfig {
             var query = "labels(" + labelsFilter + ", deps(...))";
             String[] command = {"bazel", "query", query, "--output", "location"};
             var output = Files.createTempFile("java-language-server-bazel-output", ".txt");
-            LOG.info("Running " + String.join(" ", command) + " ...");
-            var process =
-                    new ProcessBuilder()
-                            .command(command)
-                            .directory(workspaceRoot.toFile())
-                            .redirectError(ProcessBuilder.Redirect.INHERIT)
-                            .redirectOutput(output.toFile())
-                            .start();
-            // Wait for process to exit
-            var result = process.waitFor();
+            var result = execCmd(command, output);
             if (result != 0) {
-                LOG.severe("`" + String.join(" ", command) + "` returned " + result);
                 return Set.of();
             }
             // Read output
             var dependencies = new HashSet<Path>();
             for (var line : Files.readAllLines(output)) {
+                // DEBUG BEGIN
+                LOG.info("Bazel Dep: " + line);
+                // DEBUG END
                 var jar = findBazelJar(line);
                 if (jar != NOT_FOUND) {
                     dependencies.add(jar);
