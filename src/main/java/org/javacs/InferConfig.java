@@ -238,8 +238,39 @@ class InferConfig {
         return null;
     }
 
+    private int execCmd(String[] command, Path output) throws IOException, InterruptedException {
+        LOG.info("Running " + String.join(" ", command) + " ...");
+        var process =
+                new ProcessBuilder()
+                        .command(command)
+                        .directory(workspaceRoot.toFile())
+                        .redirectError(ProcessBuilder.Redirect.INHERIT)
+                        .redirectOutput(output.toFile())
+                        .start();
+        // Wait for process to exit
+        var result = process.waitFor();
+        if (result != 0) {
+            LOG.severe("`" + String.join(" ", command) + "` returned " + result);
+        }
+        return result;
+    }
+
     private Set<Path> bazelClasspath() {
         try {
+            String[] bazelInfoCmd = {
+                "bazel",
+                "info",
+                "execution_root",
+            };
+            var bazelInfoOutput = Files.createTempFile("bazel-info-output", ".txt");
+            var result = execCmd(bazelInfoCmd, bazelInfoOutput);
+            if (result != 0) {
+                return Set.of();
+            }
+            var execRoot = (new String(Files.readAllBytes(bazelInfoOutput))).trim();
+            LOG.info("Bazel execution root: " + execRoot);
+            var execRootPath = FileSystems.getDefault().getPath(execRoot);
+
             // Run bazel as a subprocess
             String[] command = {
                 "bazel",
@@ -248,18 +279,8 @@ class InferConfig {
                 "mnemonic(Javac, kind(java_library, ...) union kind(java_test, ...) union kind(java_binary, ...))"
             };
             var output = Files.createTempFile("java-language-server-bazel-output", ".txt");
-            LOG.info("Running " + String.join(" ", command) + " ...");
-            var process =
-                    new ProcessBuilder()
-                            .command(command)
-                            .directory(workspaceRoot.toFile())
-                            .redirectError(ProcessBuilder.Redirect.INHERIT)
-                            .redirectOutput(output.toFile())
-                            .start();
-            // Wait for process to exit
-            var result = process.waitFor();
+            result = execCmd(command, output);
             if (result != 0) {
-                LOG.severe("`" + String.join(" ", command) + "` returned " + result);
                 return Set.of();
             }
             // Read output
@@ -292,8 +313,8 @@ class InferConfig {
                     continue;
                 }
                 var relative = artifact.getExecPath();
-                var absolute = workspaceRoot.resolve(relative);
-                LOG.info("...found bazel dependency " + relative);
+                var absolute = execRootPath.resolve(relative);
+                LOG.info("...found bazel dependency " + absolute);
                 classpath.add(absolute);
             }
             return classpath;
