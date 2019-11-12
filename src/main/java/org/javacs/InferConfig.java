@@ -336,9 +336,6 @@ class InferConfig {
             // Read output
             var dependencies = new HashSet<Path>();
             for (var line : Files.readAllLines(output)) {
-                // DEBUG BEGIN
-                LOG.info("Bazel Dep: " + line);
-                // DEBUG END
                 var jar = findBazelJar(line);
                 if (jar != NOT_FOUND) {
                     dependencies.add(jar);
