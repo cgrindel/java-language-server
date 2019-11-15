@@ -476,17 +476,19 @@ class JavaLanguageServer extends LanguageServer {
     public CompletionItem resolveCompletionItem(CompletionItem unresolved) {
         if (unresolved.data == null) return unresolved;
         var data = GSON.fromJson(unresolved.data, CompletionData.class);
-        var markdown = findDocs(data.ptr);
-        if (markdown.isPresent()) {
-            unresolved.documentation = markdown.get();
-        }
-        if (data.ptr.isMethod()) {
-            var details = findMethodDetails(data.ptr);
-            if (details.isPresent()) {
+        if (data.ptr != null) {
+            var markdown = findDocs(data.ptr);
+            if (markdown.isPresent()) {
+              unresolved.documentation = markdown.get();
+            }
+            if (data.ptr.isMethod()) {
+              var details = findMethodDetails(data.ptr);
+              if (details.isPresent()) {
                 unresolved.detail = details.get();
                 if (data.plusOverloads != 0) {
-                    unresolved.detail += " (+" + data.plusOverloads + " overloads)";
+                  unresolved.detail += " (+" + data.plusOverloads + " overloads)";
                 }
+              }
             }
         }
         return unresolved;
