@@ -1,5 +1,11 @@
 package org.javacs;
 
+import java.util.stream.Collectors;
+import com.google.common.collect.BoundType;
+import com.google.common.collect.DiscreteDomain;
+import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.RangeSet;
+import com.google.common.collect.TreeRangeSet;
 import com.google.gson.*;
 import com.sun.source.tree.*;
 import java.nio.file.Path;
@@ -815,6 +821,31 @@ class JavaLanguageServer extends LanguageServer {
         }
     }
 
+    private static TextEdit createTextEditFromLineRange(
+        com.google.common.collect.Range<Long> lineRange, String text) {
+        var insertStart = getValidLowerRangeValue(lineRange);
+        var insertEnd = getValidUpperRangeValue(lineRange) + 1;
+        var startPosition = new Position(Math.toIntExact(insertStart), 0);
+        var endPosition = new Position(Math.toIntExact(insertEnd), 0);
+        return new TextEdit(new Range(startPosition, endPosition), text);
+    }
+
+    private static long getValidLowerRangeValue(com.google.common.collect.Range<Long> range) {
+        long value = range.lowerEndpoint();
+        if (range.lowerBoundType() == BoundType.OPEN) {
+            value++;
+        }
+        return value;
+    }
+
+    private static long getValidUpperRangeValue(com.google.common.collect.Range<Long> range) {
+        long value = range.upperEndpoint();
+        if (range.upperBoundType() == BoundType.OPEN) {
+            value--;
+        }
+        return value;
+    }
+
     private List<TextEdit> fixImports(CompileBatch compile, Path file) {
         // TODO if imports already match fixed-imports, return empty list
         // TODO preserve comments and other details of existing imports
@@ -822,6 +853,81 @@ class JavaLanguageServer extends LanguageServer {
         var pos = compile.sourcePositions();
         var lines = compile.lineMap(file);
         var edits = new ArrayList<TextEdit>();
+
+        var staticImports = new ArrayList<ImportTree>();
+        var allImports = compile.imports(file);
+        RangeSet<Long> rangeSet = TreeRangeSet.create();
+        for (var imp : allImports) {
+            if (imp.isStatic()) staticImports.add(imp);
+            var offset = pos.getStartPosition(compile.root(file), imp);
+            var line = lines.getLineNumber(offset) - 1;
+            var range = com.google.common.collect.Range
+                .closed(line, line)
+                .canonical(DiscreteDomain.longs());
+            rangeSet.add(range);
+        }
+
+        // If there are no imports, 
+        if (rangeSet.isEmpty()) {
+            long phLine = -1;
+            // If there is a package declaration, add the imports after that
+            // Else use the top of the file
+            var pkgName = compile.root(file).getPackageName();
+            if (pkgName != null) {
+                long offset = pos.getEndPosition(compile.root(file), pkgName);
+                phLine  = lines.getLineNumber(offset);
+            } else {
+                phLine = 0;
+            }
+            var placeholder = com.google.common.collect.Range.closed(phLine, phLine);
+            rangeSet.add(placeholder);
+        }
+
+        var importRanges = ImmutableSortedSet.copyOf(
+            (a, b) -> {
+                // Skipping all of the checks for lower and upper bound existence, because the
+                // ranges being created all have values
+                var lowerCompare = Long.compare(
+                    getValidLowerRangeValue(a), getValidLowerRangeValue(b));
+                if (lowerCompare != 0) {
+                    return lowerCompare;
+                }
+                var upperCompare = Long.compare(
+                    getValidUpperRangeValue(a), getValidUpperRangeValue(b));
+                return upperCompare;
+            },
+            rangeSet.asRanges());
+        // DEBUG BEGIN
+        LOG.info("*** CHUCK importRanges: " + importRanges);
+        // DEBUG END
+
+        var importRangeIterator = importRanges.iterator();
+        var newImportRange = importRangeIterator.next();
+        String importLines = imports.stream()
+            .map(s -> "import " + s + ";")
+            .collect(Collectors.joining("\n"));
+        // TODO (grindel): This is a hack to add an extra line after replacing code. We should check
+        // to see if the next line is empty before adding the extra line.
+        if (!importLines.isEmpty()) {
+            importLines += "\n";
+        }
+        var insert = createTextEditFromLineRange(newImportRange, importLines);
+        edits.add(insert);
+
+        importRangeIterator.forEachRemaining(deleteRange -> {
+            var delete = createTextEditFromLineRange(deleteRange, "");
+            edits.add(delete);
+        });
+        //for (int i = 1; i < importRanges.size(); i++) {
+            //var deleteRange = importRanges.get(i);
+            //var delete = createTextEditFromLineRange(deleteRange, "");
+            ////var delete = new TextEdit(new Range(new Position(line, 0), new Position(line + 1, 0)), "");
+            //edits.add(delete);
+        //}
+
+        // ORIGINAL
+
+        /*
         // Delete all existing imports
         for (var i : compile.imports(file)) {
             if (!i.isStatic()) {
@@ -829,7 +935,7 @@ class JavaLanguageServer extends LanguageServer {
                 var line = (int) lines.getLineNumber(offset) - 1;
                 var delete = new TextEdit(new Range(new Position(line, 0), new Position(line + 1, 0)), "");
                 edits.add(delete);
-            }
+            } 
         }
         if (imports.isEmpty()) return edits;
         // Find a place to insert the new imports
@@ -859,6 +965,7 @@ class JavaLanguageServer extends LanguageServer {
         var insertPosition = new Position((int) insertLine, 0);
         var insert = new TextEdit(new Range(insertPosition, insertPosition), insertText.toString());
         edits.add(insert);
+        */
 
         return edits;
     }
