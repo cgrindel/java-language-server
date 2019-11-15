@@ -11,5 +11,13 @@ public class Position {
         this.character = character;
     }
 
+    public static final Position create(int line, int character) {
+        return new Position(line, character);
+    }
+
+    public static final Position create(long line, long character) {
+        return new Position(Math.toIntExact(line), Math.toIntExact(character));
+    }
+
     public static final Position NONE = new Position(-1, -1);
 }

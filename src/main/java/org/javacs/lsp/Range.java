@@ -9,6 +9,10 @@ public class Range {
         this.start = start;
         this.end = end;
     }
+    
+    public static final Range create(Position start, Position end) {
+      return new Range(start, end);
+    }
 
     public static final Range NONE = new Range(Position.NONE, Position.NONE);
 }

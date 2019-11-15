@@ -842,53 +842,6 @@ class JavaLanguageServer extends LanguageServer {
         var edits = new ArrayList<TextEdit>();
 
         var importRanges = compile.getImportRanges(file);
-        // var staticImports = new ArrayList<ImportTree>();
-        // var allImports = compile.imports(file);
-        // RangeSet<Long> rangeSet = TreeRangeSet.create();
-        // for (var imp : allImports) {
-        //     if (imp.isStatic()) staticImports.add(imp);
-        //     var offset = pos.getStartPosition(compile.root(file), imp);
-        //     var line = lines.getLineNumber(offset) - 1;
-        //     var range = com.google.common.collect.Range
-        //         .closed(line, line)
-        //         .canonical(DiscreteDomain.longs());
-        //     rangeSet.add(range);
-        // }
-
-        // // If there are no imports, 
-        // if (rangeSet.isEmpty()) {
-        //     long phLine = -1;
-        //     // If there is a package declaration, add the imports after that
-        //     // Else use the top of the file
-        //     var pkgName = compile.root(file).getPackageName();
-        //     if (pkgName != null) {
-        //         long offset = pos.getEndPosition(compile.root(file), pkgName);
-        //         phLine  = lines.getLineNumber(offset);
-        //     } else {
-        //         phLine = 0;
-        //     }
-        //     var placeholder = com.google.common.collect.Range.closed(phLine, phLine);
-        //     rangeSet.add(placeholder);
-        // }
-
-        // var importRanges = ImmutableSortedSet.copyOf(
-        //     (a, b) -> {
-        //         // Skipping all of the checks for lower and upper bound existence, because the
-        //         // ranges being created all have values
-        //         var lowerCompare = Long.compare(
-        //             getValidLowerRangeValue(a), getValidLowerRangeValue(b));
-        //         if (lowerCompare != 0) {
-        //             return lowerCompare;
-        //         }
-        //         var upperCompare = Long.compare(
-        //             getValidUpperRangeValue(a), getValidUpperRangeValue(b));
-        //         return upperCompare;
-        //     },
-        //     rangeSet.asRanges());
-        // // DEBUG BEGIN
-        // LOG.info("*** CHUCK importRanges: " + importRanges);
-        // // DEBUG END
-
         var importRangeIterator = importRanges.iterator();
         var newImportRange = importRangeIterator.next();
         String importLines = imports.stream()
@@ -906,55 +859,6 @@ class JavaLanguageServer extends LanguageServer {
             var delete = createTextEditFromLineRange(deleteRange, "");
             edits.add(delete);
         });
-        //for (int i = 1; i < importRanges.size(); i++) {
-            //var deleteRange = importRanges.get(i);
-            //var delete = createTextEditFromLineRange(deleteRange, "");
-            ////var delete = new TextEdit(new Range(new Position(line, 0), new Position(line + 1, 0)), "");
-            //edits.add(delete);
-        //}
-
-        // ORIGINAL
-
-        /*
-        // Delete all existing imports
-        for (var i : compile.imports(file)) {
-            if (!i.isStatic()) {
-                var offset = pos.getStartPosition(compile.root(file), i);
-                var line = (int) lines.getLineNumber(offset) - 1;
-                var delete = new TextEdit(new Range(new Position(line, 0), new Position(line + 1, 0)), "");
-                edits.add(delete);
-            } 
-        }
-        if (imports.isEmpty()) return edits;
-        // Find a place to insert the new imports
-        long insertLine = -1;
-        var insertText = new StringBuilder();
-        // If there are imports, use the start of the first import as the insert position
-        for (var i : compile.imports(file)) {
-            if (!i.isStatic() && insertLine == -1) {
-                long offset = pos.getStartPosition(compile.root(file), i);
-                insertLine = lines.getLineNumber(offset) - 1;
-            }
-        }
-        // If there are no imports, insert after the package declaration
-        if (insertLine == -1 && compile.root(file).getPackageName() != null) {
-            long offset = pos.getEndPosition(compile.root(file), compile.root(file).getPackageName());
-            insertLine = lines.getLineNumber(offset);
-            insertText.append("\n");
-        }
-        // If there are no imports and no package, insert at the top of the file
-        if (insertLine == -1) {
-            insertLine = 0;
-        }
-        // Insert each import
-        for (var i : imports) {
-            insertText.append("import ").append(i).append(";\n");
-        }
-        var insertPosition = new Position((int) insertLine, 0);
-        var insert = new TextEdit(new Range(insertPosition, insertPosition), insertText.toString());
-        edits.add(insert);
-        */
-
         return edits;
     }
 

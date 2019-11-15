@@ -1225,7 +1225,7 @@ class CompileBatch implements AutoCloseable {
                 if (tooManyItems(result.size())) return result;
                 if (!matchesPartialName.test(c)) continue;
                 if (isSamePackage(c, packageName) || isPublicClassFile(c)) {
-                    result.add(classNameCompletion(c, isImported(file, c)));
+                    result.add(classNameCompletion(c, file));
                 }
             }
             // Check classpath
@@ -1235,7 +1235,7 @@ class CompileBatch implements AutoCloseable {
                 if (tooManyItems(result.size())) return result;
                 if (!matchesPartialName.test(c)) continue;
                 if (isSamePackage(c, packageName) || isPublicClassFile(c)) {
-                    result.add(classNameCompletion(c, isImported(file, c)));
+                    result.add(classNameCompletion(c, file));
                     classPathNames.add(c);
                 }
             }
@@ -1294,7 +1294,7 @@ class CompileBatch implements AutoCloseable {
             // If class was already autocompleted using the classpath, skip it
             if (skip.contains(name)) continue;
             // Otherwise, add this name!
-            result.add(classNameCompletion(name, isImported(fromFile, name)));
+            result.add(classNameCompletion(name, fromFile));
         }
         return result;
     }
@@ -1483,16 +1483,21 @@ class CompileBatch implements AutoCloseable {
         return i;
     }
 
-    private CompletionItem classNameCompletion(String name, boolean isImported) {
+    //private CompletionItem classNameCompletion(String name, boolean isImported) {
+    private CompletionItem classNameCompletion(String name, Path file) {
         var i = new CompletionItem();
         i.label = StringSearch.lastName(name);
         i.kind = CompletionItemKind.Class;
         i.detail = name;
-        if (isImported) {
+        if (isImported(file, name)) {
             i.sortText = String.format("%02d%s", Priority.IMPORTED_CLASS, i.label);
         } else {
             i.sortText = String.format("%02d%s", Priority.NOT_IMPORTED_CLASS, i.label);
-            i.additionalTextEdits = Lists.newArrayList(new TextEdit());
+            var importRanges = getImportRanges(file);
+            var lineNum = RangeHelpers.getValidUpperRangeValue(importRanges.last()) + 1;
+            i.additionalTextEdits = Lists.newArrayList(TextEdit.create(
+                  Range.create(Position.create(lineNum, 0), Position.create(lineNum, 0)),
+                  String.format("import %s;\n", name)));
         }
         return i;
     }
