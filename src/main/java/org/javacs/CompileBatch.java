@@ -1,5 +1,12 @@
 package org.javacs;
 
+import com.google.common.collect.BoundType;
+import com.google.common.collect.DiscreteDomain;
+import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.RangeSet;
+import com.google.common.collect.TreeRangeSet;
+import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.gson.JsonElement;
 import com.sun.source.doctree.DocTree;
 import com.sun.source.doctree.ParamTree;
@@ -293,6 +300,59 @@ class CompileBatch implements AutoCloseable {
     List<? extends ImportTree> imports(Path file) {
         return root(file).getImports();
     }
+
+    /**
+     * Returns the line ranges which contain import statements in order.
+     */
+    ImmutableSortedSet<com.google.common.collect.Range<Long>> getImportRanges(Path file) {
+        var root = root(file);
+        var pos = sourcePositions();
+        var lines = lineMap(file);
+
+        var allImports = root.getImports();
+        RangeSet<Long> rangeSet = TreeRangeSet.create();
+        for (var imp : allImports) {
+            var offset = pos.getStartPosition(root, imp);
+            var line = lines.getLineNumber(offset) - 1;
+            var range = com.google.common.collect.Range
+                .closed(line, line)
+                .canonical(DiscreteDomain.longs());
+            rangeSet.add(range);
+        }
+
+        // If there are no imports, 
+        if (rangeSet.isEmpty()) {
+            long phLine = -1;
+            // If there is a package declaration, add the imports after that
+            // Else use the top of the file
+            var pkgName = root.getPackageName();
+            if (pkgName != null) {
+                long offset = pos.getEndPosition(root, pkgName);
+                phLine  = lines.getLineNumber(offset);
+            } else {
+                phLine = 0;
+            }
+            var placeholder = com.google.common.collect.Range.closed(phLine, phLine);
+            rangeSet.add(placeholder);
+        }
+
+        return ImmutableSortedSet.copyOf(
+            (a, b) -> {
+                // Skipping all of the checks for lower and upper bound existence, because the
+                // ranges being created all have values
+                var lowerCompare = Long.compare(
+                    RangeHelpers.getValidLowerRangeValue(a), RangeHelpers.getValidLowerRangeValue(b));
+                if (lowerCompare != 0) {
+                    return lowerCompare;
+                }
+                var upperCompare = Long.compare(
+                    RangeHelpers.getValidUpperRangeValue(a), RangeHelpers.getValidUpperRangeValue(b));
+                return upperCompare;
+            },
+            rangeSet.asRanges());
+    }
+
+
 
     /** Find methods that override a method from a superclass but don't have an @Override annotation. */
     List<TreePath> needsOverrideAnnotation(Path file) {
@@ -1432,6 +1492,7 @@ class CompileBatch implements AutoCloseable {
             i.sortText = String.format("%02d%s", Priority.IMPORTED_CLASS, i.label);
         } else {
             i.sortText = String.format("%02d%s", Priority.NOT_IMPORTED_CLASS, i.label);
+            i.additionalTextEdits = Lists.newArrayList(new TextEdit());
         }
         return i;
     }

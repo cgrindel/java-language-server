@@ -476,6 +476,7 @@ class JavaLanguageServer extends LanguageServer {
     public CompletionItem resolveCompletionItem(CompletionItem unresolved) {
         if (unresolved.data == null) return unresolved;
         var data = GSON.fromJson(unresolved.data, CompletionData.class);
+
         if (data.ptr != null) {
             var markdown = findDocs(data.ptr);
             if (markdown.isPresent()) {
@@ -825,27 +826,11 @@ class JavaLanguageServer extends LanguageServer {
 
     private static TextEdit createTextEditFromLineRange(
         com.google.common.collect.Range<Long> lineRange, String text) {
-        var insertStart = getValidLowerRangeValue(lineRange);
-        var insertEnd = getValidUpperRangeValue(lineRange) + 1;
+        var insertStart = RangeHelpers.getValidLowerRangeValue(lineRange);
+        var insertEnd = RangeHelpers.getValidUpperRangeValue(lineRange) + 1;
         var startPosition = new Position(Math.toIntExact(insertStart), 0);
         var endPosition = new Position(Math.toIntExact(insertEnd), 0);
         return new TextEdit(new Range(startPosition, endPosition), text);
-    }
-
-    private static long getValidLowerRangeValue(com.google.common.collect.Range<Long> range) {
-        long value = range.lowerEndpoint();
-        if (range.lowerBoundType() == BoundType.OPEN) {
-            value++;
-        }
-        return value;
-    }
-
-    private static long getValidUpperRangeValue(com.google.common.collect.Range<Long> range) {
-        long value = range.upperEndpoint();
-        if (range.upperBoundType() == BoundType.OPEN) {
-            value--;
-        }
-        return value;
     }
 
     private List<TextEdit> fixImports(CompileBatch compile, Path file) {
@@ -856,52 +841,53 @@ class JavaLanguageServer extends LanguageServer {
         var lines = compile.lineMap(file);
         var edits = new ArrayList<TextEdit>();
 
-        var staticImports = new ArrayList<ImportTree>();
-        var allImports = compile.imports(file);
-        RangeSet<Long> rangeSet = TreeRangeSet.create();
-        for (var imp : allImports) {
-            if (imp.isStatic()) staticImports.add(imp);
-            var offset = pos.getStartPosition(compile.root(file), imp);
-            var line = lines.getLineNumber(offset) - 1;
-            var range = com.google.common.collect.Range
-                .closed(line, line)
-                .canonical(DiscreteDomain.longs());
-            rangeSet.add(range);
-        }
+        var importRanges = compile.getImportRanges(file);
+        // var staticImports = new ArrayList<ImportTree>();
+        // var allImports = compile.imports(file);
+        // RangeSet<Long> rangeSet = TreeRangeSet.create();
+        // for (var imp : allImports) {
+        //     if (imp.isStatic()) staticImports.add(imp);
+        //     var offset = pos.getStartPosition(compile.root(file), imp);
+        //     var line = lines.getLineNumber(offset) - 1;
+        //     var range = com.google.common.collect.Range
+        //         .closed(line, line)
+        //         .canonical(DiscreteDomain.longs());
+        //     rangeSet.add(range);
+        // }
 
-        // If there are no imports, 
-        if (rangeSet.isEmpty()) {
-            long phLine = -1;
-            // If there is a package declaration, add the imports after that
-            // Else use the top of the file
-            var pkgName = compile.root(file).getPackageName();
-            if (pkgName != null) {
-                long offset = pos.getEndPosition(compile.root(file), pkgName);
-                phLine  = lines.getLineNumber(offset);
-            } else {
-                phLine = 0;
-            }
-            var placeholder = com.google.common.collect.Range.closed(phLine, phLine);
-            rangeSet.add(placeholder);
-        }
+        // // If there are no imports, 
+        // if (rangeSet.isEmpty()) {
+        //     long phLine = -1;
+        //     // If there is a package declaration, add the imports after that
+        //     // Else use the top of the file
+        //     var pkgName = compile.root(file).getPackageName();
+        //     if (pkgName != null) {
+        //         long offset = pos.getEndPosition(compile.root(file), pkgName);
+        //         phLine  = lines.getLineNumber(offset);
+        //     } else {
+        //         phLine = 0;
+        //     }
+        //     var placeholder = com.google.common.collect.Range.closed(phLine, phLine);
+        //     rangeSet.add(placeholder);
+        // }
 
-        var importRanges = ImmutableSortedSet.copyOf(
-            (a, b) -> {
-                // Skipping all of the checks for lower and upper bound existence, because the
-                // ranges being created all have values
-                var lowerCompare = Long.compare(
-                    getValidLowerRangeValue(a), getValidLowerRangeValue(b));
-                if (lowerCompare != 0) {
-                    return lowerCompare;
-                }
-                var upperCompare = Long.compare(
-                    getValidUpperRangeValue(a), getValidUpperRangeValue(b));
-                return upperCompare;
-            },
-            rangeSet.asRanges());
-        // DEBUG BEGIN
-        LOG.info("*** CHUCK importRanges: " + importRanges);
-        // DEBUG END
+        // var importRanges = ImmutableSortedSet.copyOf(
+        //     (a, b) -> {
+        //         // Skipping all of the checks for lower and upper bound existence, because the
+        //         // ranges being created all have values
+        //         var lowerCompare = Long.compare(
+        //             getValidLowerRangeValue(a), getValidLowerRangeValue(b));
+        //         if (lowerCompare != 0) {
+        //             return lowerCompare;
+        //         }
+        //         var upperCompare = Long.compare(
+        //             getValidUpperRangeValue(a), getValidUpperRangeValue(b));
+        //         return upperCompare;
+        //     },
+        //     rangeSet.asRanges());
+        // // DEBUG BEGIN
+        // LOG.info("*** CHUCK importRanges: " + importRanges);
+        // // DEBUG END
 
         var importRangeIterator = importRanges.iterator();
         var newImportRange = importRangeIterator.next();
